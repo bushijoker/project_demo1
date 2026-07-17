@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from langgraph.constants import END
 from langgraph.graph import StateGraph
 
 from app.import_process.agent.nodes import node_md_img, node_document_split
@@ -7,7 +8,7 @@ from app.import_process.agent.nodes.node_entry import node_entry
 from app.import_process.agent.nodes.node_import_milvus import node_import_milvus
 from app.import_process.agent.nodes.node_item_name_recognition import node_item_name_recognition
 from app.import_process.agent.nodes.node_pdf_to_md import node_pdf_to_md
-from app.import_process.agent.state import ImportGraphState
+from app.import_process.agent.state import ImportGraphState, state
 
 load_dotenv()
 
@@ -22,3 +23,22 @@ workflow.add_node(node_bge_embedding)
 workflow.add_node(node_import_milvus)
 
 workflow.set_entry_point("node_entry")
+
+def route_after_entry(state: ImportGraphState)-> str:
+    # 分支1：开启MD直接导入 → 跳过PDF转MD，直接执行MD图片处理
+    if state.get("is_md_read_enabled"):
+        return "node_md_img"
+    elif state.get("is_pdf_read_enabled"):
+        return "node_pdf_to_md"
+    else:
+        return END
+
+workflow.add_conditional_edges(
+    "node_entry",
+    route_after_entry,
+    {
+        "node_mg_img":"node_md_img",
+        "node_pdf_to_md":"node_pdf_to_md",
+        END:END
+    }
+)
