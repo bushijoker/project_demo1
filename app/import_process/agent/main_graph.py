@@ -8,7 +8,7 @@ from app.import_process.agent.nodes.node_entry import node_entry
 from app.import_process.agent.nodes.node_import_milvus import node_import_milvus
 from app.import_process.agent.nodes.node_item_name_recognition import node_item_name_recognition
 from app.import_process.agent.nodes.node_pdf_to_md import node_pdf_to_md
-from app.import_process.agent.state import ImportGraphState, state
+from app.import_process.agent.state import ImportGraphState
 
 load_dotenv()
 
@@ -42,3 +42,12 @@ workflow.add_conditional_edges(
         END:END
     }
 )
+
+workflow.add_edge("mode_pdf_to_md","node_md_img")
+workflow.add_edge("node_md_img","node_document_split")
+workflow.add_edge("node_document_split","node_item_name_recognition")
+workflow.add_edge("node_item_name_recognition","node_bge_embedding")
+workflow.add_edge("node_bge_embedding","node_import_milvus")
+workflow.add_edge("node_import_milvus",END)
+
+kb_import_app=workflow.compile()

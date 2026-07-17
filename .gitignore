@@ -1,5 +1,9 @@
 # 日志目录
 logs/
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
 # IDEA 配置文件夹
 .idea/
 # 单个配置文件
