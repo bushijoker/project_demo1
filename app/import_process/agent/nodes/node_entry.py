@@ -1,7 +1,11 @@
+import os
 import sys
+from pathlib import Path
 
 from app.core.logger import logger, node_log
-from app.import_process.agent.state import ImportGraphState
+from app.import_process.agent.state import ImportGraphState, create_default_state
+from app.utils.task_utils import add_running_task, add_done_task
+
 
 @node_log("node_entry")
 def node_entry(state: ImportGraphState) -> ImportGraphState:
@@ -13,12 +17,65 @@ def node_entry(state: ImportGraphState) -> ImportGraphState:
     2. 判断文件类型 (PDF/MD)。
     3. 设置 state 中的路由标记 (is_pdf_read_enabled / is_md_read_enabled)。
     """
-    # 模拟简单的路由逻辑，防止报错 (仅 node_entry 需要)
-    if "local_file_path" in state:
-        path = state["local_file_path"]
-        if path.endswith(".pdf"):
-            state["is_pdf_read_enabled"] = True
-        elif path.endswith(".md"):
-            state["is_md_read_enabled"] = True
+    #1.任务状态记录处理
+    add_running_task(state['task_id'],'node_entry')
+    #2.判断文件类型
+    local_file_path=state['local_file_path']
+    if not local_file_path:
+        logger.warning(f"没有输入文件地址，无法处理，直接跳转到结束节点")
+        add_done_task(state['task_id'],'node_entry')
+        return state
+    if local_file_path.endswith(".md"):
+        state['is_md_read_enabled']=True
+        state['md_path']=local_file_path
+    elif local_file_path.endswith(".pdf"):
+        state['is_pdf_read_enabled']=True
+        state['pdf_path']=local_file_path
+    else:
+        logger.warning(f"虽然输出了loclal_file_path,但是无法识别文件类型,请检查输入文件类型是否正确,目前只支持md和pdf文件,请检查! {local_file_path}")
+        add_done_task(state['task_id'],'node_entry')
+        return state
+    #3.获取文件标识
+    #基于os.path处理
+    file_title_os=os.path.basename(local_file_path).split(".")[0]
+    #基于pathlib处理
+    file_title=Path(local_file_path).stem
+    state['file_title']=file_title
+    add_done_task(state['task_id'],'node_entry')
+    return  state
+    # # 模拟简单的路由逻辑，防止报错 (仅 node_entry 需要)
+    # if "local_file_path" in state:
+    #     path = state["local_file_path"]
+    #     if path.endswith(".pdf"):
+    #         state["is_pdf_read_enabled"] = True
+    #     elif path.endswith(".md"):
+    #         state["is_md_read_enabled"] = True
+    #
+    # return state
+if __name__ == '__main__':
 
-    return state
+    # 单元测试：覆盖不支持类型、MD、PDF三种场景
+    logger.info("===== 开始node_entry节点单元测试 =====")
+
+    # 测试1: 不支持的TXT文件
+    test_state1 = create_default_state(
+        task_id="test_task_001",
+        local_file_path="联想海豚用户手册.txt"
+    )
+    node_entry(test_state1)
+
+    # 测试2: MD文件
+    test_state2 = create_default_state(
+        task_id="test_task_002",
+        local_file_path="小米用户手册.md"
+    )
+    node_entry(test_state2)
+
+    # 测试3: PDF文件
+    test_state3 = create_default_state(
+        task_id="test_task_003",
+        local_file_path="万用表的使用.pdf"
+    )
+    node_entry(test_state3)
+
+    logger.info("===== 结束node_entry节点单元测试 =====")
