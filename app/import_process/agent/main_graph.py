@@ -2,7 +2,8 @@ from dotenv import load_dotenv
 from langgraph.constants import END
 from langgraph.graph import StateGraph
 
-from app.import_process.agent.nodes import node_md_img, node_document_split
+from app.import_process.agent.nodes.node_md_img import node_md_img
+from app.import_process.agent.nodes.node_document_split import node_document_split
 from app.import_process.agent.nodes.node_bge_embedding import node_bge_embedding
 from app.import_process.agent.nodes.node_entry import node_entry
 from app.import_process.agent.nodes.node_import_milvus import node_import_milvus
@@ -37,13 +38,13 @@ workflow.add_conditional_edges(
     "node_entry",
     route_after_entry,
     {
-        "node_mg_img":"node_md_img",
+        "node_md_img":"node_md_img",
         "node_pdf_to_md":"node_pdf_to_md",
         END:END
     }
 )
 
-workflow.add_edge("mode_pdf_to_md","node_md_img")
+workflow.add_edge("node_pdf_to_md","node_md_img")
 workflow.add_edge("node_md_img","node_document_split")
 workflow.add_edge("node_document_split","node_item_name_recognition")
 workflow.add_edge("node_item_name_recognition","node_bge_embedding")
