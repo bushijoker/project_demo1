@@ -34,6 +34,10 @@ def node_pdf_to_md(state: ImportGraphState) -> ImportGraphState:
     full_zip_url = step_2_upload_and_poll(pdf_path_obj)
     # 调用step_3_download_and_extract()进行下载和解压
     md_path = step_3_download_and_extract(full_zip_url, output_dir_obj, pdf_path_obj.stem)
+    # 更新状态md_path和md_content
+    state["md_path"]=md_path
+    with open(md_path,"r",encoding="utf-8") as file:
+        state["md_content"]=file.read()
     return state
 
 @step_log("step_1_validate_paths")
