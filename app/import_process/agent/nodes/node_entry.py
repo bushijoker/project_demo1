@@ -43,15 +43,6 @@ def node_entry(state: ImportGraphState) -> ImportGraphState:
     state['file_title']=file_title
     add_done_task(state['task_id'],'node_entry')
     return  state
-    # # 模拟简单的路由逻辑，防止报错 (仅 node_entry 需要)
-    # if "local_file_path" in state:
-    #     path = state["local_file_path"]
-    #     if path.endswith(".pdf"):
-    #         state["is_pdf_read_enabled"] = True
-    #     elif path.endswith(".md"):
-    #         state["is_md_read_enabled"] = True
-    #
-    # return state
 if __name__ == '__main__':
 
     # 单元测试：覆盖不支持类型、MD、PDF三种场景
