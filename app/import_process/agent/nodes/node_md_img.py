@@ -8,7 +8,7 @@ from pathlib import Path
 
 from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import StrOutputParser
-from win32gui import DeleteObject
+from minio.deleteobjects import DeleteObject
 
 from app.clients.minio_utils import get_minio_client
 from app.conf.lm_config import lm_config
@@ -18,7 +18,7 @@ from app.core.logger import logger, node_log, step_log
 from app.import_process.agent.state import ImportGraphState
 from app.lm.lm_utils import get_llm_client
 from app.utils.rate_limit_utils import apply_api_rate_limit
-from app.utils.task_utils import add_running_task
+from app.utils.task_utils import add_running_task, add_done_task
 
 """
 1.  **Step 1：初始化校验**：读取MD路径与内容，校验文件合法性，定位同级images文件夹。
@@ -55,6 +55,10 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
     new_md_content =step_4_upload_images_replace(image_summaries,image_targets,md_content,md_path_obj.stem)
     # 6. 备份新的md内容,改为原名称 _new.md
     new_md_file_path_str = step_5_backup_md_file(md_path_obj, new_md_content)
+    # 7. 进行md_path和md_content内容更新(state)
+    state["md_path"] = new_md_file_path_str
+    state["md_content"] = new_md_content
+    add_done_task(state["task_id"], "node_md_img")
     return state
 
 @step_log("step_1_get_content")
