@@ -149,9 +149,9 @@ def step_2_upload_and_poll(pdf_path_obj: Path):
                 raise RuntimeError("任务处理失败，没有获取到pdf转换为md文件的链接地址")
             return full_zip_url
         elif extract_result["state"]=="failed":
-            err_msg = extract_result.get("err_msg") or extract_result.get("error_msg") or str(extract_result)
+            # err_msg = extract_result.get("err_msg") or extract_result.get("error_msg") or str(extract_result)
             logger.error(f"MinerU 任务失败详情：{extract_result}")
-            raise RuntimeError(f"MinerU 任务处理失败：{err_msg}")
+            # raise RuntimeError(f"MinerU 任务处理失败：{err_msg}")
         else:
             logger.warning(f"任务处理中，请稍后重试")
             time.sleep(poll_interval)

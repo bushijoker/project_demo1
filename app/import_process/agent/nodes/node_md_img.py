@@ -1,4 +1,5 @@
 import base64
+import mimetypes
 import os
 import re
 import sys
@@ -7,8 +8,11 @@ from pathlib import Path
 
 from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import StrOutputParser
+from win32gui import DeleteObject
 
+from app.clients.minio_utils import get_minio_client
 from app.conf.lm_config import lm_config
+from app.conf.minio_config import minio_config
 from app.core.load_prompt import load_prompt
 from app.core.logger import logger, node_log, step_log
 from app.import_process.agent.state import ImportGraphState
@@ -24,9 +28,9 @@ from app.utils.task_utils import add_running_task
 5.  **Step 5：保存与状态更新**：生成「原文件名_new.md」备份，更新流程状态，完成闭环。
 """
 # MinIO支持的图片格式集合（小写后缀，统一匹配标准）
-SUPPORT_IMG_FORMATS = {"png", "jpg", "jpeg", "gif", "bmp", "webp"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 def is_supported_image(image_name:str)->bool:
-    return os.path.splitext(image_name)[1].lower() in SUPPORT_IMG_FORMATS
+    return os.path.splitext(image_name)[1].lower() in IMAGE_EXTENSIONS
 
 @node_log("node_md_img")
 def node_md_img(state: ImportGraphState) -> ImportGraphState:
@@ -47,7 +51,10 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
     image_targets = step_2_scan_images(md_content, images_dir_obj)
     # 4. 进行图片内容总结和处理[调用多模态模型,总结图片内容,最终返回 图片名/总结]
     image_summaries = step_3_image_summary(image_targets, md_path_obj.stem)
-    logger.info(image_summaries)
+    # 5. 上传图片到minio服务器,替换图片的本地地址和描述!返回替换后的md_content内容
+    new_md_content =step_4_upload_images_replace(image_summaries,image_targets,md_content,md_path_obj.stem)
+    # 6. 备份新的md内容,改为原名称 _new.md
+    new_md_file_path_str = step_5_backup_md_file(md_path_obj, new_md_content)
     return state
 
 @step_log("step_1_get_content")
@@ -79,7 +86,7 @@ def step_2_scan_images(md_content:str,image_dir_obj:Path):
             continue
         # 设置正则表达式，匹配md_content中的图片，![](xxx.jpg)
         pattern=re.compile(r"!\[.*?\]\(.*?"+re.escape(image_name)+".*?\)")
-        items=list(pattern.findall(md_content))
+        items=list(pattern.finditer(md_content))
         if not items:
             logger.warning(f"图片未找到: {image_name},继续搜索下一个图片")
             continue
@@ -100,7 +107,7 @@ def step_3_image_summary(image_targets:list,stem):
         #设置限流
         apply_api_rate_limit(requests_limiter,max_requests=100)
         #获取提示词
-        prompt=load_prompt("image_summary",root_folder=stem,image_context=context)
+        prompt=load_prompt("image_summary",root_folder=stem,image_content=context)
         #获取模型对象
         model=get_llm_client(lm_config.lv_model)
         # 判断image_path是否为Path对象，若不是则转换为Path对象
@@ -129,6 +136,73 @@ def step_3_image_summary(image_targets:list,stem):
         # 保存图片的名称和图片的总结
         image_summaries[image_name]=summary
     return image_summaries
+
+@step_log("step_4_upload_images_replace")
+def step_4_upload_images_replace(image_summaries:dict,image_targets:list,md_content:str,stem:str):
+    """
+        将图片上传到minio服务器!
+        同时替代原md内容中的图片地址和描述内容!
+        确保任何位置可以进行访问图片和现实
+        :param image_summaries: 图片 和 总结
+        :param image_targets: 图片名称 地址 和上下文
+        :param md_content: 原md内容
+        :param stem: md文件名
+        :return: 替换后的md_content
+        """
+    #1.获取minio客户端对象
+    minio_client=get_minio_client()
+    # 获取knowledge-base-files桶中，/upload-images下以md文件的名字为目录名的目录中所有的文件
+    minio_list=minio_client.list_objects(
+        bucket_name=minio_config.bucket_name,
+        prefix=f"{minio_config.minio_img_dir[1:]}/{stem}",
+        recursive=True#递归搜索
+    )
+    #准备删除参数
+    delete_object_list=[DeleteObject(obj.object_name) for obj in minio_list]
+    # 将之前上传的md文件所对应的图片删除
+    errors=minio_client.remove_objects(
+        bucket_name=minio_config.bucket_name,
+        delete_object_list=delete_object_list
+    )
+    # 记录删除失败的图片
+    for error in errors:
+        logger.warning(f"删除图片失败：{error}")
+    # 创建存储图片上传到minio中的地址的字典
+    image_urls={}
+    #上传图片到minio服务器
+    for image_name,image_path,_ in image_targets:
+        try:
+            minio_client.fput_object(
+                bucket_name=minio_config.bucket_name,
+                object_name=f"{minio_config.minio_img_dir[1:]}/{stem}/{image_name}",
+                file_path=image_path,
+                content_type=mimetypes.guess_type(image_name)[0]
+            )
+            image_urls[image_name]=f"http://{minio_config.endpoint}/{minio_config.bucket_name}{minio_config.minio_img_dir}/{stem}/{image_name}"
+            logger.info(f"图片上传成功：{image_name},url:{image_urls[image_name]}")
+        except Exception as e:
+            logger.warning(f"图片上传失败：{image_name},原因：{e}")
+            logger.info("继续处理下一张图片")
+    image_infos={}
+    #创建一个字典，准备替换数据,{image_name:(summary,url)}
+    for image_name,summary in image_summaries.items():
+        image_infos[image_name]=(summary,image_urls[image_name])
+    #判断image_urls是否为空
+    if image_urls:
+        for image_name,(summary,url) in image_infos.items():
+            #设置正则表达式，匹配md_content中的图片
+            pattern=re.compile(r"!\[.*?\]\(.*?"+re.escape(image_name)+".*?\)")
+            #替换图片
+            md_content=pattern.sub(lambda _:f"![{summary}]({url})",md_content)
+    return md_content
+
+@step_log("step_5_backup_md_file")
+def step_5_backup_md_file(md_path_obj, new_md_content):
+    # 保留旧文件，在新文件（原文件名_new.md）中进行替换
+    new_md_path_obj=md_path_obj.parent / f"{md_path_obj.stem}_new{md_path_obj.suffix}"
+    # 将替换之后的new_md_content写入到新文件中
+    new_md_path_obj.write_text(new_md_content,encoding="utf-8")
+    return str(new_md_path_obj)
 
 if __name__ == "__main__":
     """本地测试入口：单独运行该文件时，执行MD图片处理全流程测试"""
