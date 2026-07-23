@@ -7,7 +7,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.core.logger import logger, node_log, step_log
 from app.import_process.agent.state import ImportGraphState
-from app.utils.task_utils import add_running_task
+from app.utils.task_utils import add_running_task, add_done_task
 
 # 单个文本块最大长度（控制不超过模型上下文）
 CHUNK_SIZE = 200 # 小值方便测试切割
@@ -35,19 +35,19 @@ def node_document_split(state: ImportGraphState) -> ImportGraphState:
     # 将切分结果备份到本地 `chunks.json` 文件，同时将最终 chunks 存入 `state`，供后续向量入库使用。
     step_4_backup_chunks(final_chunks,state)
     state["chunks"]=final_chunks
+    add_done_task(state["task_id"], "node_document_split")
     return state
 
 @step_log("step_1_get_content")
 def step_1_get_content(state: ImportGraphState):
-    md_content=state.get("md_content")
-    file_title=state.get("file_title")
-    #判断md_content是否为空
-    if not md_content:
-        logger.error("md_content为空，没有获取到md文件中的内容")
-        raise ValueError("md_content为空，没有获取到md文件中的内容")
-    #将md_content中的\r\n` / `\r`统一替换为\n
-    md_content=md_content.replace("\r\n", "\n").replace("\r", "\n")
-    return md_content, file_title
+   md_content=state.get("md_content")
+   file_title=state.get("file_title")
+   #判断md_content是否为空
+   if not md_content:
+       logger.error("文档内容为空，请检查输入参数")
+       raise ValueError("文档内容为空，请检查输入参数")
+   md_content=md_content.replace("\r\n", "\n").replace("\r", "\n")
+   return md_content, file_title
 @step_log("step_2_split_by_title")
 def step_2_split_by_title(md_content, file_title):
     #设置匹配标题的正则表达式
@@ -66,33 +66,29 @@ def step_2_split_by_title(md_content, file_title):
     for line in lines:
         line=line.strip()
         if line.startswith("```") or line.startswith("~~~"):
-            #当前行为代码块
             is_code_block=not is_code_block
             current_lines.append(line)
             continue
         if not is_code_block and title_pattern.match(line):
-            #当前行为标题,先保存上个标题中的行
             if current_title:
                 chunks.append({
                     "title": current_title,
-                    "content": "\n".join(current_lines),
-                    "file_title": file_title
+                    "content":"/n".join(current_lines),
+                    "file_title":file_title
                 })
             #重置数据
             current_title=line
             current_lines=[line]
         else:
-            #当前行不是标题
             current_lines.append(line)
-    #保存最后一个标题中的行
     if current_title:
         chunks.append({
-            "title":current_title,
-            "content": "\n".join(current_lines),
+            "title": current_title,
+            "content": "/n".join(current_lines),
             "file_title": file_title
         })
-    #兜底处理，如果md_content中没有标题，则生成默认标题
-    if not chunks:
+        #兜底处理，如果md_content中没有标题，则生成默认标题
+    if not current_title:
         chunks.append({
             "title": "无主题",
             "content": md_content,
@@ -103,18 +99,18 @@ def step_2_split_by_title(md_content, file_title):
 @step_log("step_3_refine_chunks")
 def step_3_refine_chunks(sections):
     #创建RecursiveCharacterTextSplitter
-    spliter=RecursiveCharacterTextSplitter(
-        separators=["\n\n","\n","。","！", "；"],
+    splitter=RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n", "。", "！","?"],
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
     )
     final_chunks=[]
     for section in sections:
-        chunks=spliter.split_text(section["content"])
+        chunks=splitter.split_text(section["content"])
         #判断二次切分得到的数据片段的个数
         has_multi_chunks=len(chunks)>1
         #对二次切分的结果进行遍历
-        for idx,chunk in enumerate(chunks,start=1):
+        for idx,chunk in enumerate(chunks):
             title=f"{section['title']}_{idx}" if has_multi_chunks else section["title"]
             final_chunks.append({
                 "title": title,
@@ -124,18 +120,20 @@ def step_3_refine_chunks(sections):
                 "part":idx,
             })
     return final_chunks
+
 @step_log("step_4_backup_chunks")
 def step_4_backup_chunks(final_chunks,state):
-    chunks_json_path=Path(state["md_path"]).parent / "chunks.json"
-    with open(chunks_json_path,"w",encoding="utf-8") as f:
+    # 获取保存数据片段的chunks.json文件的路径
+    chunks_json_path = Path(state["md_path"]).parent / "chunks.json"
+    # 将最终的数据片段转换为json存储到chunks.json文件中
+    with open(chunks_json_path, "w", encoding="utf-8") as f:
         json.dump(
             final_chunks,
             f,
-            ensure_ascii=False,
-            indent=4
+            ensure_ascii=False,  # 正常输出中文
+            indent=4,
         )
-    logger.info(f"备份成功，备份地址 {chunks_json_path}")
-
+    logger.debug(f"数据备份成功,备份地址:{chunks_json_path}")
 if __name__ == '__main__':
     """
     单元测试：联合node_md_img（图片处理节点）进行集成测试

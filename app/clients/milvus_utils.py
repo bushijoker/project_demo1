@@ -27,7 +27,7 @@ def get_milvus_client():
             logger.info("Milvus客户端连接成功")
         return _milvus_client
     except Exception as e:
-        logger.error(f"Milvus客户端连接异常：{str(e)}", exc_info=True)
+        logger.error("Milvus客户端连接异常：{}", str(e), exc_info=True)
         return None
 
 
@@ -100,7 +100,7 @@ def fetch_chunks_by_chunk_ids(
                     results.extend(got)
                 continue
             except Exception as e:
-                logger.warning(f"Milvus get方法查询失败，将回退至query方法：{str(e)}")
+                logger.warning("Milvus get方法查询失败，将回退至query方法：{}", str(e))
 
         # 方式2：get方法失败，回退使用filter过滤查询
         try:
@@ -109,7 +109,7 @@ def fetch_chunks_by_chunk_ids(
             if q:
                 results.extend(q)
         except Exception as e:
-            logger.error(f"Milvus query方法批量查询chunk_id失败：{str(e)}", exc_info=True)
+            logger.error("Milvus query方法批量查询chunk_id失败：{}", str(e), exc_info=True)
 
     return results
 
@@ -192,5 +192,5 @@ def hybrid_search(client, collection_name, reqs, ranker_weights=(0.5, 0.5), norm
         logger.info(f"Milvus混合搜索完成，集合[{collection_name}]共检索到{len(res[0])}条结果")
         return res
     except Exception as e:
-        logger.error(f"Milvus混合搜索执行失败，集合[{collection_name}]：{str(e)}", exc_info=True)
+        logger.error("Milvus混合搜索执行失败，集合[{}]：{}", collection_name, str(e), exc_info=True)
         return None

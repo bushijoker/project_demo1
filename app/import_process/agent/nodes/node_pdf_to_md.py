@@ -117,7 +117,7 @@ def step_2_upload_and_poll(pdf_path_obj: Path):
             #发送请求获取结果
             poll_response=requests.get(url,headers=header)
         except Exception as e:
-            logger.warning(f"通过batch_id获取任务结果的请求失败，错误信息：{e}")
+            logger.warning("通过batch_id获取任务结果的请求失败，错误信息：{}", e)
             time.sleep(poll_interval)
             continue
         #判断响应状态码
@@ -149,9 +149,8 @@ def step_2_upload_and_poll(pdf_path_obj: Path):
                 raise RuntimeError("任务处理失败，没有获取到pdf转换为md文件的链接地址")
             return full_zip_url
         elif extract_result["state"]=="failed":
-            # err_msg = extract_result.get("err_msg") or extract_result.get("error_msg") or str(extract_result)
-            logger.error(f"MinerU 任务失败详情：{extract_result}")
-            # raise RuntimeError(f"MinerU 任务处理失败：{err_msg}")
+            err_msg = extract_result.get("err_msg") or extract_result.get("error_msg") or "未知错误"
+            raise RuntimeError(f"MinerU 任务处理失败：{err_msg}")
         else:
             logger.warning(f"任务处理中，请稍后重试")
             time.sleep(poll_interval)
@@ -192,7 +191,7 @@ def step_3_download_and_extract(full_zip_url: str, output_dir_obj: Path,stem: st
         zip_file.extractall(extract_path)
     # 获取extract_path所对应目录中的所有md文件
     md_files=list(extract_path.glob("*.md"))#rglob = recursive glob，递归遍历
-    # 判断md_file_list中是否有md文件存在
+    # 判断md_files中是否有md文件存在
     if not md_files:
         raise RuntimeError("pdf文件转换md文件失败，没有获取到pdf文件对应的md文件")
     target_md_file=None

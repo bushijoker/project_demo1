@@ -106,7 +106,7 @@ def step_2_scan_images(md_content:str,image_dir_obj:Path):
 def step_3_image_summary(image_targets:list,stem):
     #设置一个字典，存储图片所对应的描述文本
     image_summaries={}
-    requests_limiter=deque()
+    requests_limiter=deque()#实现滑动窗口限流
     for image_name,image_path,context in image_targets:
         #设置限流
         apply_api_rate_limit(requests_limiter,max_requests=100)
@@ -185,7 +185,7 @@ def step_4_upload_images_replace(image_summaries:dict,image_targets:list,md_cont
             image_urls[image_name]=f"http://{minio_config.endpoint}/{minio_config.bucket_name}{minio_config.minio_img_dir}/{stem}/{image_name}"
             logger.info(f"图片上传成功：{image_name},url:{image_urls[image_name]}")
         except Exception as e:
-            logger.warning(f"图片上传失败：{image_name},原因：{e}")
+            logger.warning("图片上传失败：{},原因：{}", image_name, e)
             logger.info("继续处理下一张图片")
     image_infos={}
     #创建一个字典，准备替换数据,{image_name:(summary,url)}

@@ -44,7 +44,7 @@ def get_bge_m3_ef():
         logger.success("BGE-M3模型初始化成功，已开启原生L2归一化")
         return _bge_m3_ef
     except Exception as e:
-        logger.error(f"BGE-M3模型初始化失败：{str(e)}", exc_info=True)
+        logger.error("BGE-M3模型初始化失败：{}", str(e), exc_info=True)
         raise  # 向上抛出异常，由调用方处理
 
 
@@ -92,7 +92,7 @@ def generate_embeddings(texts):
         return result
 
     except Exception as e:
-        logger.error(f"文本向量生成失败：{str(e)}", exc_info=True)
+        logger.error("文本向量生成失败：{}", str(e), exc_info=True)
         raise  # 不吞异常，向上传递让调用方做重试/降级处理
 
 

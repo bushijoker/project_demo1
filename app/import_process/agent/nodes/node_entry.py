@@ -37,7 +37,7 @@ def node_entry(state: ImportGraphState) -> ImportGraphState:
         return state
     #3.获取文件标识
     #基于os.path处理
-    file_title_os=os.path.basename(local_file_path).split(".")[0]
+    # file_title_os=os.path.basename(local_file_path).split(".")[0]
     #基于pathlib处理
     file_title=Path(local_file_path).stem
     state['file_title']=file_title
