@@ -11,9 +11,7 @@ from app.conf.mineru_config import mineru_config
 from app.core.logger import logger, node_log, step_log
 from app.import_process.agent.state import ImportGraphState, create_default_state
 from app.utils.path_util import PROJECT_ROOT
-from app.utils.task_utils import add_running_task
-
-
+from app.utils.task_utils import add_running_task, add_done_task
 
 
 @node_log("node_pdf_to_md")
@@ -38,6 +36,7 @@ def node_pdf_to_md(state: ImportGraphState) -> ImportGraphState:
     state["md_path"]=md_path
     with open(md_path,"r",encoding="utf-8") as file:
         state["md_content"]=file.read()
+    add_done_task(state["task_id"],"node_pdf_to_md")
     return state
 
 @step_log("step_1_validate_paths")

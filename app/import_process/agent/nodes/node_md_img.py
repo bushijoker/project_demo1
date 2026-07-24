@@ -180,7 +180,7 @@ def step_4_upload_images_replace(image_summaries:dict,image_targets:list,md_cont
                 bucket_name=minio_config.bucket_name,
                 object_name=f"{minio_config.minio_img_dir[1:]}/{stem}/{image_name}",
                 file_path=image_path,
-                content_type=mimetypes.guess_type(image_name)[0]
+                content_type=mimetypes.guess_type(image_name)[0]#根据图片文件名自动猜出图片 MIME 类型（image/jpeg/image/png等）
             )
             image_urls[image_name]=f"http://{minio_config.endpoint}/{minio_config.bucket_name}{minio_config.minio_img_dir}/{stem}/{image_name}"
             logger.info(f"图片上传成功：{image_name},url:{image_urls[image_name]}")
